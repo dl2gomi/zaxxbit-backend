@@ -1,0 +1,10 @@
+const axios = require('axios');
+
+async function getFromMEXC() {
+  const res = await axios.get('https://api.mexc.com/api/v3/ticker/24hr');
+  const usdtPairs = res.data.filter((p) => p.symbol.endsWith('BTC'));
+
+  console.log(usdtPairs.slice(0, 3)); // preview
+}
+
+getFromMEXC();
