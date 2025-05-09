@@ -7,7 +7,7 @@ const jwt = require('jsonwebtoken');
 const JWT_SECRET = process.env.JWT_SECRET;
 
 const register = async (req, res) => {
-  const { password, confirmPassword, email } = req.body;
+  const { password, confirmPassword, email, refcode } = req.body;
   try {
     // Check if the user already exists
     const existingUser = await User.findOne({ email });
@@ -23,7 +23,9 @@ const register = async (req, res) => {
     // Hash the password
     const hashedPassword = await bcrypt.hash(password, 10);
 
-    // Create a new company
+    const referUser = await User.findOne({ 'profile.referCode': refcode });
+
+    // Create a new user
     const user = new User({
       password: hashedPassword,
       email,
@@ -31,6 +33,7 @@ const register = async (req, res) => {
     const seed = generateSeed();
     user.profile = {
       referCode: randomStringReferCode(6),
+      referedBy: referUser ? referUser.id : null,
       seed,
     };
 
