@@ -102,6 +102,7 @@ const addMessage = async (req, res) => {
       user: req.user.id,
       timestamp: new Date(),
     });
+    if (ticket.status === 'closed') ticket.status = 'active';
 
     await ticket.save();
 
@@ -129,9 +130,47 @@ const list = async (req, res) => {
   }
 };
 
+const close = async (req, res) => {
+  try {
+    const { id } = req.params;
+
+    // Check if ID is a valid ObjectId
+    if (!mongoose.Types.ObjectId.isValid(id)) {
+      return res.status(404).json({ message: 'This ticket does not exist!' });
+    }
+
+    const ticket = await (await Ticket.findById(id)).populate('user');
+
+    if (!ticket) {
+      return res.status(404).json({
+        message: 'This ticket does not exist!',
+      });
+    }
+
+    if (ticket.user.id !== req.user.id) {
+      return res.status(403).json({
+        message: 'This is not your ticket.',
+      });
+    }
+
+    ticket.status = 'closed';
+
+    await ticket.save();
+
+    const ticketData = ticket.toObject();
+    delete ticketData.user;
+    ticketData.user = req.user.id;
+
+    return res.json({ ticket: ticketData, message: 'Successfully closed the ticket' });
+  } catch (err) {
+    return res.status(500).json({ message: 'Internal Server Error' });
+  }
+};
+
 module.exports = {
   store,
   show,
   addMessage,
   list,
+  close,
 };

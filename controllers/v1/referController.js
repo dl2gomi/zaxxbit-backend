@@ -43,7 +43,21 @@ const check = async (req, res) => {
   });
 };
 
+const list = async (req, res) => {
+  try {
+    const referrals = await User.find({ 'profile.referedBy': req.user.id }).select([
+      'email',
+      'createdAt',
+    ]);
+
+    return res.json({ referrals });
+  } catch (err) {
+    return res.status(500).json({ message: 'Internal Server Error' });
+  }
+};
+
 module.exports = {
   info,
   check,
+  list,
 };
