@@ -10,6 +10,17 @@ const profileSchema = new mongoose.Schema(
       default: null,
     },
     seed: { type: String, default: null },
+    lastLogin: { type: Date, default: null },
+    lastChange: { type: Date, default: null },
+  },
+  { _id: false }
+);
+
+const tfaSchema = new mongoose.Schema(
+  {
+    base: { type: String, required: true },
+    url: { type: String, required: true },
+    enabled: { type: Boolean, default: false },
   },
   { _id: false }
 );
@@ -59,6 +70,7 @@ const userSchema = new mongoose.Schema(
     email: { type: String, required: true, unique: true }, // unique index
     password: { type: String, required: true },
     profile: profileSchema,
+    tfa: tfaSchema,
     wallet: walletSchema,
   },
   {

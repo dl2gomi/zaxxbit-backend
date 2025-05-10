@@ -3,6 +3,7 @@ const { randomStringReferCode, generateSeed } = require('@/helpers/generator');
 const User = require('@/models/User');
 const bcrypt = require('bcrypt');
 const jwt = require('jsonwebtoken');
+const speakeasy = require('speakeasy');
 
 const JWT_SECRET = process.env.JWT_SECRET;
 
@@ -62,6 +63,17 @@ const register = async (req, res) => {
       },
     };
 
+    const secret = speakeasy.generateSecret({
+      name: `${process.env.APP_NAME}:${email}`,
+      issuer: process.env.APP_NAME,
+      length: 10,
+    });
+
+    user.tfa = {
+      base: secret.base32,
+      url: secret.otpauth_url,
+    };
+
     // Save the company to the database
     await user.save();
 
@@ -87,6 +99,10 @@ const login = async (req, res) => {
       return res.status(400).json({ message: 'Invalid password' });
     }
 
+    user.profile.lastLogin = new Date();
+    user.markModified('profile');
+    await user.save();
+
     const token = jwt.sign({ userId: user._id }, JWT_SECRET, { expiresIn: '24h' });
     res.json({
       message: 'Successfully signed in!',
@@ -103,11 +119,46 @@ const info = async (req, res) => {
     return res.json({
       email: req.user.email,
       id: req.user.id,
+      tfa: req.user.tfa.enabled,
       balance: Object.values(req.user.wallet)
         .filter((entry) => entry && typeof entry.balance === 'object' && entry.balance.toNumber)
         .reduce((sum, entry) => sum + entry.balance.toNumber(), 0),
       referedBy: req.user.profile.referedBy,
+      lastLogin: req.user.profile.lastLogin,
+      lastChange: req.user.profile.lastChange,
     });
+  } catch (error) {
+    res.status(500).json({ message: 'Internal Server error' });
+  }
+};
+
+const tfaInfo = async (req, res) => {
+  try {
+    return res.json({
+      tfa: req.user.tfa,
+    });
+  } catch (error) {
+    res.status(500).json({ message: 'Internal Server error' });
+  }
+};
+
+const tfaCheck = async (req, res) => {
+  try {
+    const { code } = req.body;
+    const isVerified = speakeasy.totp.verify({
+      secret: req.user.tfa.base,
+      encoding: 'base32',
+      token: code,
+      window: 1,
+    });
+
+    if (!isVerified) {
+      return res.status(400).json({ message: 'Invalid code' });
+    } else {
+      req.user.tfa.enabled = true;
+      await req.user.save();
+      return res.json({ message: 'Successfully enabled 2FA!' });
+    }
   } catch (error) {
     res.status(500).json({ message: 'Internal Server error' });
   }
@@ -200,9 +251,9 @@ const update = async (req, res) => {
 
 const change = async (req, res) => {
   try {
-    const { oldPassword, newPassword, confPassword } = req.body;
+    const { oldPassword, newPassword, confirmPassword } = req.body;
 
-    if (newPassword !== confPassword) {
+    if (newPassword !== confirmPassword) {
       return res.status(400).json({
         message: `Password confirmation doesn't match`,
       });
@@ -216,13 +267,13 @@ const change = async (req, res) => {
     }
 
     user.password = await bcrypt.hash(newPassword, 10);
+    user.profile.lastChange = new Date();
     await user.save();
 
     return res.json({
       message: 'Successfully changed password',
     });
   } catch (error) {
-    console.error(error);
     res.status(500).json({ message: 'Internal Server error' });
   }
 };
@@ -277,4 +328,6 @@ module.exports = {
   change,
   updateAvatar,
   serveAvatar,
+  tfaInfo,
+  tfaCheck,
 };
